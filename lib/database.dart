@@ -55,7 +55,6 @@ class Database {
   Future<http.Response> createPost(Post post) async {
     var url = Uri.parse('$endpoint/posts/createPost');
     var jsonData = jsonEncode(post);
-    print(jsonData);
     var response = await client.post(
       url,
       headers: <String, String>{
@@ -177,6 +176,17 @@ class Database {
     var request = http.MultipartRequest(
         'POST', Uri.parse('$endpoint/images/userProfilePic/upload'));
     request.fields['uid'] = uid;
+    request.files.add(await http.MultipartFile.fromPath('img', fileName));
+    var streamedResponse = await request.send();
+    var response = await http.Response.fromStream(streamedResponse);
+    var data = jsonDecode(response.body);
+    return data['message'];
+  }
+
+  Future<String> uploadPostPic(String fileName, String pid) async {
+    var request = http.MultipartRequest(
+        'POST', Uri.parse('$endpoint/images/postPic/upload'));
+    request.fields['pid'] = pid;
     request.files.add(await http.MultipartFile.fromPath('img', fileName));
     var streamedResponse = await request.send();
     var response = await http.Response.fromStream(streamedResponse);

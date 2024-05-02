@@ -26,6 +26,7 @@ class _ReportPageState extends State<ReportPage> {
   final _imagePicker = ImagePicker();
   String? uid = FirebaseAuth.instance.currentUser?.uid;
   File? selectedImage;
+  String? imageLink;
   String? animal;
   int? quantity;
   String? activity;
@@ -45,7 +46,6 @@ class _ReportPageState extends State<ReportPage> {
       return; // Stop further execution
     }
     resetErrorState();
-
     Location location = Location();
     Position position = await location.getCurrentLocation();
     Map<String, dynamic> coordinate = {
@@ -55,24 +55,26 @@ class _ReportPageState extends State<ReportPage> {
     String datetime = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
 
     Post newPost = Post(
-      uid: uid!,
-      datetime: datetime,
-      coordinate: coordinate,
-      animalName: animal!,
-      quantity: quantity!,
-      activity: activity!,
-    );
+        uid: uid!,
+        datetime: datetime,
+        coordinate: coordinate,
+        animalName: animal!,
+        quantity: quantity!,
+        activity: activity!,
+        imgLink: imageLink);
 
     try {
       Database db = Database();
       http.Response response =
           await db.createPost(newPost); //Pass post object to createPost
-
       if (response.statusCode == 200) {
-        final Map<String, dynamic> responseData = json.decode(response.body);
+        var responseData = json.decode(response.body);
+        print('New post: $responseData');
+        var pid = responseData['pid'];
+        print('PID: $pid');
+        var data = await db.uploadPostPic(selectedImage!.path, pid);
+        print('Image uploaded: $data');
         widget.onPostCreated!(); // Update the map
-        print(
-            "Post created with ID: ${responseData['pid']}"); //Print created pid for development purposes
       } else {
         throw Exception('Failed to create post');
       }
@@ -101,26 +103,20 @@ class _ReportPageState extends State<ReportPage> {
                   borderRadius: BorderRadius.circular(20),
                   child: SizedBox(
                       width: MediaQuery.of(context).size.width * 0.85,
-                      height: MediaQuery.of(context).size.height * 0.63,
+                      height: MediaQuery.of(context).size.height * 0.55,
                       child: Scaffold(
                           appBar: AppBar(
                             leading: CloseButton(
-                                onPressed: () {
-                                  widget.controller.toggle();
-                                },
-                                color: Colors.black87),
-                            title: const Text('New Sighting',
-                                style: TextStyle(
-                                    color: Colors.black87,
-                                    fontWeight: FontWeight.w700)),
-                            backgroundColor: Colors.transparent,
-                            foregroundColor: Colors.transparent,
-                            elevation: 0,
-                            shadowColor: Colors.transparent,
+                              onPressed: () {
+                                widget.controller.toggle();
+                              },
+                            ),
+                            title:
+                                const Text('New Sighting', style: TextStyle()),
                           ),
                           body: Column(
                             children: [
-                              SizedBox(height: 20),
+                              SizedBox(height: 30),
                               if (showError) // Conditionally display the error message
                                 const Padding(
                                   padding: EdgeInsets.all(8.0),
@@ -136,22 +132,27 @@ class _ReportPageState extends State<ReportPage> {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Container(
-                                      width: 100,
-                                      height: 100,
-                                      child: selectedImage != null
-                                          ? Image.file(selectedImage!)
-                                          : const Icon(Icons.image_rounded,
-                                              size: 90)),
+                                      width: 90,
+                                      height: 90,
+                                      child: ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                          child: selectedImage != null
+                                              ? Image.file(selectedImage!,
+                                                  fit: BoxFit.cover)
+                                              : const Icon(Icons.image_rounded,
+                                                  size: 90))),
+                                  SizedBox(width: 10),
                                   IntrinsicWidth(
                                       child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                      OutlinedButton(
+                                      ElevatedButton(
                                           onPressed: getImageFromGallery,
                                           child: const Text(
                                               "Upload from library")),
-                                      OutlinedButton(
+                                      ElevatedButton(
                                           onPressed: getImageFromCamera,
                                           child: const Text("Take a photo")),
                                     ],
@@ -172,10 +173,11 @@ class _ReportPageState extends State<ReportPage> {
                                   child: Align(
                                       alignment: const FractionalOffset(.5, .9),
                                       child: ElevatedButton(
-                                          onPressed: () {
-                                            submitOnPressed();
+                                          onPressed: () async {
+                                            await submitOnPressed();
                                           },
-                                          child: const Text('Submit'))))
+                                          child: const Text('Submit')))),
+                              const SizedBox(height: 20),
                             ],
                           ))))))
     ]);
