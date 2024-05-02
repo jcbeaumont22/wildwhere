@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:wildwhere/location.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:wildwhere/database.dart';
@@ -22,7 +25,7 @@ class ReportPage extends StatefulWidget {
 class _ReportPageState extends State<ReportPage> {
   final _imagePicker = ImagePicker();
   String? uid = FirebaseAuth.instance.currentUser?.uid;
-  XFile? selectedImage;
+  File? selectedImage;
   String? animal;
   int? quantity;
   String? activity;
@@ -102,15 +105,22 @@ class _ReportPageState extends State<ReportPage> {
                       child: Scaffold(
                           appBar: AppBar(
                             leading: CloseButton(
-                              onPressed: () {
-                                widget.controller.toggle();
-                              },
-                              
-                            ),
-                            title: const Text('Sighting Report'),
+                                onPressed: () {
+                                  widget.controller.toggle();
+                                },
+                                color: Colors.black87),
+                            title: const Text('New Sighting',
+                                style: TextStyle(
+                                    color: Colors.black87,
+                                    fontWeight: FontWeight.w700)),
+                            backgroundColor: Colors.transparent,
+                            foregroundColor: Colors.transparent,
+                            elevation: 0,
+                            shadowColor: Colors.transparent,
                           ),
                           body: Column(
                             children: [
+                              SizedBox(height: 20),
                               if (showError) // Conditionally display the error message
                                 const Padding(
                                   padding: EdgeInsets.all(8.0),
@@ -122,17 +132,16 @@ class _ReportPageState extends State<ReportPage> {
                                     ),
                                   ),
                                 ),
-                              const Row(
-                                children: [
-                                  Icon(Icons.image, size: 70),
-                                  Text("Select an image to upload",
-                                      style: TextStyle(fontSize: 20)),
-                                ],
-                              ),
-                              const SizedBox(height: 15),
                               Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const SizedBox(width: 10),
+                                  Container(
+                                      width: 100,
+                                      height: 100,
+                                      child: selectedImage != null
+                                          ? Image.file(selectedImage!)
+                                          : const Icon(Icons.image_rounded,
+                                              size: 90)),
                                   IntrinsicWidth(
                                       child: Column(
                                     crossAxisAlignment:
@@ -173,11 +182,65 @@ class _ReportPageState extends State<ReportPage> {
   }
 
   Future getImageFromGallery() async {
-    selectedImage = await _imagePicker.pickImage(source: ImageSource.gallery);
+    bool isGranted = await checkAndRequestPhotosPermission();
+    if (!isGranted) {
+      return;
+    }
+    XFile? newImage = await _imagePicker.pickImage(source: ImageSource.gallery);
+    if (newImage != null) {
+      CroppedFile? croppedImage =
+          await ImageCropper().cropImage(sourcePath: newImage.path);
+      if (croppedImage != null) {
+        setState(() {
+          selectedImage = File(croppedImage.path);
+        });
+      }
+    }
   }
 
   Future getImageFromCamera() async {
-    selectedImage = await _imagePicker.pickImage(source: ImageSource.camera);
+    bool isGranted = await checkAndRequestCameraPermission();
+    if (!isGranted) {
+      return;
+    }
+    XFile? newImage = await _imagePicker.pickImage(source: ImageSource.camera);
+    if (newImage != null) {
+      CroppedFile? croppedImage =
+          await ImageCropper().cropImage(sourcePath: newImage.path);
+      if (croppedImage != null) {
+        setState(() {
+          selectedImage = File(croppedImage.path);
+        });
+      }
+    }
+  }
+
+  Future<bool> checkAndRequestPhotosPermission() async {
+    var status = await Permission.photos.status;
+    if (status.isGranted) {
+      return true;
+    } else if (status.isDenied) {
+      status = await Permission.photos.request();
+      return status.isGranted;
+    } else if (status.isPermanentlyDenied) {
+      openAppSettings(); // This can prompt the user to open app settings and change permission
+      return false;
+    }
+    return false;
+  }
+
+  Future<bool> checkAndRequestCameraPermission() async {
+    var status = await Permission.camera.status;
+    if (status.isGranted) {
+      return true;
+    } else if (status.isDenied) {
+      status = await Permission.photos.request();
+      return status.isGranted;
+    } else if (status.isPermanentlyDenied) {
+      openAppSettings(); // This can prompt the user to open app settings and change permission
+      return false;
+    }
+    return false;
   }
 
   Widget animalTypeButton() {

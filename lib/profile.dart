@@ -23,17 +23,15 @@ class _ProfilePageState extends State<Profile> {
     loadProfileData();
   }
 
-  void updateImage(String newImage) {
-    setState(() => imageLink = newImage);
-  }
-
   void loadProfileData() async {
     prefs = await SharedPreferences.getInstance();
     setState(() {
       username = prefs.getString('username');
-      bio = (prefs.getString('bio')?.isEmpty == true ? 'Say something about yourself!' : prefs.getString('bio'));
+      bio = (prefs.getString('bio')?.isEmpty == true
+          ? 'Say something about yourself!'
+          : prefs.getString('bio'));
       email = prefs.getString('email');
-      imageLink = prefs.getString('imglink');
+      imageLink = prefs.getString('imagelink');
     });
   }
 
@@ -68,9 +66,10 @@ class _ProfilePageState extends State<Profile> {
                           decoration: const BoxDecoration(
                             shape: BoxShape.circle,
                           ),
-                          child: imageLink == ''
-                              ? Image.asset('assets/images/defaultpp.png')
-                              : Image.network(imageLink!))
+                          child: (imageLink == null || imageLink == '')
+                              ? Image.asset('assets/images/defaultpp.png',
+                                  fit: BoxFit.cover)
+                              : Image.network(imageLink!, fit: BoxFit.cover))
                     ],
                   ),
                   const SizedBox(width: 10),

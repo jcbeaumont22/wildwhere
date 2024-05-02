@@ -7,17 +7,13 @@ import 'package:wildwhere/mapscreen.dart';
 import 'package:wildwhere/profile.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:wildwhere/database.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class EditProfile extends StatefulWidget {
   final SharedPreferences prefs;
   final bool? firstTimeSignin;
-  final Function(File)? onUpdateImage;
 
-  const EditProfile(
-      {super.key,
-      required this.prefs,
-      this.firstTimeSignin,
-      this.onUpdateImage});
+  const EditProfile({super.key, required this.prefs, this.firstTimeSignin});
 
   @override
   State<EditProfile> createState() => EditProfileState();
@@ -91,8 +87,9 @@ class EditProfileState extends State<EditProfile> {
                           shape: BoxShape.circle,
                         ),
                         child: (imageLink == null || imageLink == '')
-                              ? Image.asset('assets/images/defaultpp.png')
-                              : Image.network(imageLink!),
+                            ? Image.asset('assets/images/defaultpp.png',
+                                fit: BoxFit.cover)
+                            : Image.network(imageLink!, fit: BoxFit.cover),
                       ),
                 const SizedBox(width: 15),
                 const Text("Edit Profile Image",
@@ -185,7 +182,9 @@ class EditProfileState extends State<EditProfile> {
                       ),
                       const SizedBox(height: 30),
                       ElevatedButton(
-                          onPressed: handleSave,
+                          onPressed: () async {
+                            handleSave();
+                          },
                           style: ButtonStyle(
                               backgroundColor: MaterialStateProperty.all<Color>(
                                 const Color.fromARGB(255, 92, 110, 71),
@@ -201,6 +200,10 @@ class EditProfileState extends State<EditProfile> {
   }
 
   Future getImageFromGallery() async {
+    bool isGranted = await checkAndRequestPhotosPermission();
+    if (!isGranted) {
+      return;
+    }
     XFile? selectedImage = await picker.pickImage(source: ImageSource.gallery);
     if (selectedImage != null) {
       CroppedFile? croppedImage =
@@ -209,14 +212,15 @@ class EditProfileState extends State<EditProfile> {
         setState(() {
           selectedProfileImage = File(croppedImage.path);
         });
-        if (widget.onUpdateImage != null) {
-          widget.onUpdateImage!(selectedProfileImage!);
-        }
       }
     }
   }
 
   Future getImageFromCamera() async {
+    bool isGranted = await checkAndRequestCameraPermission();
+    if (!isGranted) {
+      return;
+    }
     XFile? newImage = await picker.pickImage(source: ImageSource.camera);
     if (newImage != null) {
       CroppedFile? croppedImage =
@@ -225,9 +229,6 @@ class EditProfileState extends State<EditProfile> {
         setState(() {
           selectedProfileImage = File(croppedImage.path);
         });
-        if (widget.onUpdateImage != null) {
-          widget.onUpdateImage!(selectedProfileImage!);
-        }
       }
     }
   }
@@ -236,29 +237,57 @@ class EditProfileState extends State<EditProfile> {
     if (_formKey.currentState!.validate()) {
       Database db = Database();
       await db.updateUserByUID(
-        uid: FirebaseAuth.instance.currentUser!.uid,
-        email: _emailController.text,
-        username: _usernameController.text,
-        bio: _bioController.text,
-        //pronouns: _pronounsController.text
-      );
+          uid: FirebaseAuth.instance.currentUser!.uid,
+          email: _emailController.text,
+          username: _usernameController.text,
+          bio: _bioController.text,
+          imgLink: imageLink
+          //pronouns: _pronounsController.text
+          );
       widget.prefs.setString('username', _usernameController.text);
       widget.prefs.setString('email', _emailController.text);
       widget.prefs.setString('bio', _bioController.text);
       //widget.prefs.setString('pronouns', _pronounsController.text);
-      // For the image, check both if the callback and the selected image are not null
-      if (selectedProfileImage != null && widget.onUpdateImage != null) {
-        widget.onUpdateImage!(selectedProfileImage!);
-        await db.uploadProfilePic(
+      if (selectedProfileImage != null) {
+        var imageLink = await db.uploadProfilePic(
             selectedProfileImage!.path, FirebaseAuth.instance.currentUser!.uid);
+        widget.prefs.setString('imagelink', imageLink);
       }
       if (widget.firstTimeSignin == true) {
-        Navigator.pushReplacement(
-            context, MaterialPageRoute(builder: (context) => const MapScreen()));
+        Navigator.pushReplacement(context,
+            MaterialPageRoute(builder: (context) => const MapScreen()));
       } else {
         Navigator.pop(context, true);
       }
     }
+  }
+
+  Future<bool> checkAndRequestPhotosPermission() async {
+    var status = await Permission.photos.status;
+    if (status.isGranted) {
+      return true;
+    } else if (status.isDenied) {
+      status = await Permission.photos.request();
+      return status.isGranted;
+    } else if (status.isPermanentlyDenied) {
+      openAppSettings(); // This can prompt the user to open app settings and change permission
+      return false;
+    }
+    return false;
+  }
+
+  Future<bool> checkAndRequestCameraPermission() async {
+    var status = await Permission.camera.status;
+    if (status.isGranted) {
+      return true;
+    } else if (status.isDenied) {
+      status = await Permission.photos.request();
+      return status.isGranted;
+    } else if (status.isPermanentlyDenied) {
+      openAppSettings(); // This can prompt the user to open app settings and change permission
+      return false;
+    }
+    return false;
   }
 
   @override
